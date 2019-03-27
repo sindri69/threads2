@@ -130,22 +130,37 @@ void buffer_exit(void) {
 // #########################################################//
 // ## The work functions for producers #####################//
 int  produce_entree() {
+    // vantar P og C function?
+    P(entree_p);
+    V(mutex);
     rand_sleep(100);
     entree_produced++;
+    P(mutex);
+    V(entree_c);
     return 0;
 }
 int  produce_steak(){
+    P(steak_p);
+    V(mutex);
     rand_sleep(100);
     steaks_produced++;
+    P(mutex);
+    V(steak_c);
     return 0;
 }
 int  produce_vegan(){
+    P(vegan_p);
+    V(mutex);
     rand_sleep(100);
     system("./micro.sh");
     vegan_produced++;
+    P(mutex);
+    V(vegan_c);
     return 0;
 }
 int  produce_dessert(){
+    P(dessert_p);
+    V(mutex);
     rand_sleep(100);
     printf("         _.-.         \n");
     printf("       ,'/ //\\       \n");
@@ -160,6 +175,8 @@ int  produce_dessert(){
     printf(" / /                  \n");
     printf("(_/  hh               \n");    
     dessert_produced++;
+    P(mutex);
+    V(dessert_c);
     return 0;
 }
 struct timeval* produce(unsigned int* i) {
@@ -206,6 +223,8 @@ struct timeval* produce(unsigned int* i) {
 // #########################################################//
 // ## The work functions for consumers #####################//
 int  consume_entree(){
+
+    P(entree_c);
     if (entree_produced < 1) {
       // if this happens then something bad is going on :/
       sio_puts("WHO STOLE MY ENTREE!!!!\n");
@@ -213,13 +232,17 @@ int  consume_entree(){
       rand_sleep(10000);
       return -1;
     } else {
+      V(mutex);
       entree_produced--;
       rand_sleep(1000);
       entree_consumed++;
+      P(mutex);
     }
+    V(entree_p);
     return 0;
 }
 int  consume_steak(){
+    P(steak_c);
     if (steaks_produced < 1) {
       // ## if this happens then something bad is going on :/
       sio_puts("STEAK THEAF !\n");
@@ -227,29 +250,38 @@ int  consume_steak(){
       rand_sleep(10000);
       return -1;
     } else {
+      V(mutex);
       steaks_produced--;
       rand_sleep(3000);
       steaks_consumed++;
+      P(mutex);
     }
+    V(steak_p);
     return 0;
 }
 int  consume_vegan() {
+    P(vegan_c);
+    
     if (vegan_produced < 1) {
       // ## if this happens then something bad is going on :/
       sio_puts("WHO STEALS A VEGAN DISH?! \n");
-// ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
+      // ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
       rand_sleep(10000);
       return -1;
     } else {
+      V(mutex);
       vegan_produced--;
       rand_sleep(500);
       system("./munch.sh");
       rand_sleep(500);
       vegan_consumed++;
+      P(mutex);
     }
+    V(vegan_p);
     return 0;
 }
 int  consume_dessert() {
+    P(dessert_c);
     // ## The resturant only has two spoons :( Ppl. will have to share!
     // #################################################################
     static int spoon = 2; // ## YOU MAY NOT CHANGE THIS!! ##############
@@ -265,12 +297,15 @@ int  consume_dessert() {
       while (!spoon) {
         rand_sleep(10);
       }
+      V(mutex);
       spoon--;
       dessert_produced--;
       rand_sleep(600);
       dessert_consumed++;
       spoon++;
+      P(mutex);
     }
+    V(dessert_p);
     return 0;   
 }
 
