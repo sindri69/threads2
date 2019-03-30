@@ -86,6 +86,9 @@ void buffer_init(unsigned int buffersize) {
      sem_init(&vegan_p, 0, 0);
      sem_init(&dessert_c, 0, free_slots);
      sem_init(&dessert_p, 0, 0);
+     sem_init(&consumers, 0, free_slots);
+     sem_init(&producers, 0, 0);
+
      
      // ## Try to open the /sys/light/light file.
      if( (light = fopen(LIGHTFILE, "r+")) == NULL) { 
@@ -136,7 +139,7 @@ int  produce_entree() {
     rand_sleep(100);
     ++entree_produced;
     P(&mutex);
-    V(entree_c);
+    V(&entree_c);
     return 0;
 }
 int  produce_steak(){
@@ -233,9 +236,9 @@ int  consume_entree(){
       return -1;
     } else {
       V(&mutex);
-      entree_produced--;
+      --entree_produced;
       rand_sleep(1000);
-      entree_consumed++;
+      ++entree_consumed;
       P(&mutex);
     }
     V(&entree_p);
@@ -371,6 +374,7 @@ void* producer( void* vargp ) {
       ******************************************************/
      
      // ## if there is a free slot we produce to fill it.
+     P(&producers);
      if( free_slots ) {
           // ## produce() takes reference to the product to produce. 
           unsigned int prod = 0;
@@ -383,12 +387,14 @@ void* producer( void* vargp ) {
           // ## update add produced value (called prod) to the array.
           printf("Putting production %u in slot %d\n", prod, last_slot);
           buff[last_slot] = prod;
+          V(&mutex);
           last_slot = last_slot + 1;  // filled a slot so move index
           if ( last_slot == num_slots ) {
                last_slot = 0;         // we must not go out-of-bounds.
           }
           free_slots = free_slots - 1; // one less free slots available
-
+          P(&mutex);
+          V(&consumers);
      }
   } // end while
   printf("Thread Runningtime was ~%lusec. \n", thrd_runtime.tv_sec);
@@ -423,10 +429,11 @@ void* consumer( void* vargp ) {
       * MISSING CODE 4/6                                   *
       * HERE YOU MUST REVISE AND ADD YOUR CODE FROM PART 1 *
       ******************************************************/     
-
+     P(&consumers);
      if (num_slots - free_slots) {
           printf("Consumer takes prod from slot %d ", first_slot);
           int tmp_prod = buff[first_slot];
+          V(&mutex);
           buff[first_slot] = -1;            // zero the slot consumed.
           first_slot = first_slot + 1;      // update buff index.
           if (first_slot == num_slots ) {
@@ -439,6 +446,8 @@ void* consumer( void* vargp ) {
 
           timeradd(&thrd_runtime, t, &thrd_runtime);
           free(t); // ef you DELETE ME you will have a MEMORY LEEK!!!     
+          P(&mutex);
+          V(&producers);
      }  
      
   } // end while
@@ -453,13 +462,19 @@ void* consumer( void* vargp ) {
 pthread_t spawn_producer( thread_info *arg )
 {
      printf("Spawning thread %d as a producer \n", arg->thread_nr);
-    
+     
+     pthread_t tid;
      producer(NULL);
      /******************************************************
       * MISSING CODE 5/6                                   *
       * HERE YOU MUST REVISE AND ADD YOUR CODE FROM PART 1 *
       ******************************************************/
-    
+        Pthread_create(
+          &tid,
+          NULL,
+          producer,
+          NULL);
+
      return 0;
 }
 
@@ -467,11 +482,16 @@ pthread_t spawn_consumer( thread_info *arg )
 {
      printf("Spawning thread %d as a consumer\n", arg->thread_nr);
 
+     pthread_t tid;
      consumer(NULL);
      /******************************************************
       * MISSING CODE 6/6                                   *
       * HERE YOU MUST REVISE AND ADD YOUR CODE FROM PART 1 *
       ******************************************************/
-     
+        Pthread_create(
+          &tid,
+          NULL,
+          consumer,
+          NULL);
      return 0;
 }
