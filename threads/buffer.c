@@ -77,6 +77,11 @@ void buffer_init(unsigned int buffersize) {
       * IN buffer.h                                        *
       ******************************************************/
 
+     sem_init(&consumers, 0, free_slots);
+     sem_init(&producers, 0, 0);
+     sem_init(&last_slot_lock, 0, 1);
+     sem_init(free_slot_lock, 0, 1);
+
      sem_init(&mutex, 0, 1);
      sem_init(&entree_c, 0, free_slots);
      sem_init(&entree_p, 0, 0);
@@ -86,8 +91,6 @@ void buffer_init(unsigned int buffersize) {
      sem_init(&vegan_p, 0, 0);
      sem_init(&dessert_c, 0, free_slots);
      sem_init(&dessert_p, 0, 0);
-     sem_init(&consumers, 0, free_slots);
-     sem_init(&producers, 0, 0);
 
      
      // ## Try to open the /sys/light/light file.
@@ -376,6 +379,7 @@ void* producer( void* vargp ) {
      // ## if there is a free slot we produce to fill it.
      P(&producers);
      if( free_slots ) {
+          //P(&free_slot_lock); //rétt?
           // ## produce() takes reference to the product to produce. 
           unsigned int prod = 0;
           // ## returns a timeval struct that was malloced. 
@@ -390,11 +394,13 @@ void* producer( void* vargp ) {
           V(&mutex);
           last_slot = last_slot + 1;  // filled a slot so move index
           if ( last_slot == num_slots ) {
+               //P(&last_slot_lock); //hvar á V að vera?
                last_slot = 0;         // we must not go out-of-bounds.
           }
           free_slots = free_slots - 1; // one less free slots available
+          //V(&free_slot_lock); //rétt?
           P(&mutex);
-          V(&consumers);
+          
      }
   } // end while
   printf("Thread Runningtime was ~%lusec. \n", thrd_runtime.tv_sec);
@@ -439,8 +445,9 @@ void* consumer( void* vargp ) {
           if (first_slot == num_slots ) {
                first_slot = 0;              // we must not go out-of-bounds.
           }
+          //P(free_slot_lock); //rétt?
           free_slots = free_slots + 1;      // one more free slots available
-          
+         // V(free_slot_lock); //rétt?
           printf("and consumes prod %d \n", tmp_prod);
           struct timeval* t = consume(tmp_prod);
 
