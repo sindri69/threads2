@@ -79,8 +79,8 @@ void buffer_init(unsigned int buffersize) {
 
      sem_init(&consumers, 0, free_slots);
      sem_init(&producers, 0, 0);
-     sem_init(&last_slot_lock, 0, 1);
-     sem_init(free_slot_lock, 0, 1);
+     //sem_init(&last_slot_lock, 0, 1);
+     //sem_init(free_slot_lock, 0, 1);
 
      sem_init(&mutex, 0, 1);
      sem_init(&entree_c, 0, free_slots);
@@ -136,7 +136,6 @@ void buffer_exit(void) {
 // #########################################################//
 // ## The work functions for producers #####################//
 int  produce_entree() {
-    // vantar P og v function?
     P(&entree_p);
     V(&mutex);
     rand_sleep(100);
@@ -249,8 +248,8 @@ int  consume_entree(){
 }
 int  consume_steak(){
     P(&steak_c);
-    //if (steaks_produced < 1)
-    if (!steaks_produced) {
+    //if (!steaks_produced < )
+    if (steaks_produced < 1) {
       // ## if this happens then something bad is going on :/
       sio_puts("STEAK THEAF !\n");
 // ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
@@ -268,8 +267,8 @@ int  consume_steak(){
 }
 int  consume_vegan() {
     P(&vegan_c);
-    //if (vegan_produced < 1)
-    if (!vegan_produced) {
+    //if (!vegan_produced)
+    if (vegan_produced < 1) {
       // ## if this happens then something bad is going on :/
       sio_puts("WHO STEALS A VEGAN DISH?! \n");
       // ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
@@ -293,8 +292,8 @@ int  consume_dessert() {
     // #################################################################
     static int spoon = 2; // ## YOU MAY NOT CHANGE THIS!! ##############
     // #################################################################
-    // if (dessert_produced < 1)
-    if (!dessert_produced) {
+    // if (!dessert_produced)
+    if (dessert_produced < 1) {
       // ## if this happens then something bad is going on :/
       sio_puts("I SCREAM FOR ICE-CREAM?! \n");
 // ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
@@ -379,7 +378,7 @@ void* producer( void* vargp ) {
      // ## if there is a free slot we produce to fill it.
      P(&producers);
      if( free_slots ) {
-          //P(&free_slot_lock); //rétt?
+          //P(&free_slot_lock);
           // ## produce() takes reference to the product to produce. 
           unsigned int prod = 0;
           // ## returns a timeval struct that was malloced. 
@@ -394,14 +393,15 @@ void* producer( void* vargp ) {
           V(&mutex);
           last_slot = last_slot + 1;  // filled a slot so move index
           if ( last_slot == num_slots ) {
-               //P(&last_slot_lock); //hvar á V að vera?
+               //P(&last_slot_lock); hvar á V að vera?
                last_slot = 0;         // we must not go out-of-bounds.
           }
           free_slots = free_slots - 1; // one less free slots available
-          //V(&free_slot_lock); //rétt?
+          //V(&free_slot_lock);
           P(&mutex);
-          
+          V(&consumer);
      }
+     
   } // end while
   printf("Thread Runningtime was ~%lusec. \n", thrd_runtime.tv_sec);
 
