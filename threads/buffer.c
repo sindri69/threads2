@@ -77,7 +77,19 @@ void buffer_init(unsigned int buffersize) {
       * IN buffer.h                                        *
       ******************************************************/
 
+     sem_init(&mutex, 0, 1);
+     sem_init(&entree_c, 0, free_slots);
+     sem_init(&entree_p, 0, 0);
+     sem_init(&steak_c, 0, free_slots);
+     sem_init(&steak_p, 0, 0);
+     sem_init(&vegan_c, 0, free_slots);
+     sem_init(&vegan_p, 0, 0);
+     sem_init(&dessert_c, 0, free_slots);
+     sem_init(&dessert_p, 0, 0);
+     sem_init(&consumers, 0, free_slots);
+     sem_init(&producers, 0, 0);
 
+     
      // ## Try to open the /sys/light/light file.
      if( (light = fopen(LIGHTFILE, "r+")) == NULL) { 
           // failed and thus we open a local directory file instead.
@@ -121,22 +133,37 @@ void buffer_exit(void) {
 // #########################################################//
 // ## The work functions for producers #####################//
 int  produce_entree() {
+    // vantar P og v function?
+    P(&entree_p);
+    V(&mutex);
     rand_sleep(100);
-    entree_produced++;
+    ++entree_produced;
+    P(&mutex);
+    V(&entree_c);
     return 0;
 }
 int  produce_steak(){
+    P(&steak_p);
+    V(&mutex);
     rand_sleep(100);
-    steaks_produced++;
+    ++steaks_produced;
+    P(&mutex);
+    V(&steak_c);
     return 0;
 }
 int  produce_vegan(){
+    P(&vegan_p);
+    V(&mutex);
     rand_sleep(100);
     system("./micro.sh");
-    vegan_produced++;
+    ++vegan_produced;
+    P(&mutex);
+    V(&vegan_c);
     return 0;
 }
 int  produce_dessert(){
+    P(&dessert_p);
+    V(&mutex);
     rand_sleep(100);
     printf("         _.-.         \n");
     printf("       ,'/ //\\       \n");
@@ -150,7 +177,9 @@ int  produce_dessert(){
     printf("  / /  `'             \n");
     printf(" / /                  \n");
     printf("(_/  hh               \n");    
-    dessert_produced++;
+    ++dessert_produced;
+    P(&mutex);
+    V(&dessert_c);
     return 0;
 }
 struct timeval* produce(unsigned int* i) {
@@ -197,6 +226,8 @@ struct timeval* produce(unsigned int* i) {
 // #########################################################//
 // ## The work functions for consumers #####################//
 int  consume_entree(){
+
+    P(&entree_c);
     if (entree_produced < 1) {
       // if this happens then something bad is going on :/
       sio_puts("WHO STOLE MY ENTREE!!!!\n");
@@ -204,48 +235,63 @@ int  consume_entree(){
       rand_sleep(10000);
       return -1;
     } else {
-      entree_produced--;
+      V(&mutex);
+      --entree_produced;
       rand_sleep(1000);
-      entree_consumed++;
+      ++entree_consumed;
+      P(&mutex);
     }
+    V(&entree_p);
     return 0;
 }
 int  consume_steak(){
-    if (steaks_produced < 1) {
+    P(&steak_c);
+    //if (steaks_produced < 1)
+    if (!steaks_produced) {
       // ## if this happens then something bad is going on :/
       sio_puts("STEAK THEAF !\n");
 // ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
       rand_sleep(10000);
       return -1;
     } else {
-      steaks_produced--;
+      V(&mutex);
+      --steaks_produced;
       rand_sleep(3000);
-      steaks_consumed++;
+      ++steaks_consumed;
+      P(&mutex);
     }
+    V(&steak_p);
     return 0;
 }
 int  consume_vegan() {
-    if (vegan_produced < 1) {
+    P(&vegan_c);
+    //if (vegan_produced < 1)
+    if (!vegan_produced) {
       // ## if this happens then something bad is going on :/
       sio_puts("WHO STEALS A VEGAN DISH?! \n");
-// ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
+      // ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
       rand_sleep(10000);
       return -1;
     } else {
-      vegan_produced--;
+      V(&mutex);
+      --vegan_produced;
       rand_sleep(500);
       system("./munch.sh");
       rand_sleep(500);
-      vegan_consumed++;
+      ++vegan_consumed;
+      P(&mutex);
     }
+    V(&vegan_p);
     return 0;
 }
 int  consume_dessert() {
+    P(&dessert_c);
     // ## The resturant only has two spoons :( Ppl. will have to share!
     // #################################################################
     static int spoon = 2; // ## YOU MAY NOT CHANGE THIS!! ##############
     // #################################################################
-    if (dessert_produced < 1) {
+    // if (dessert_produced < 1)
+    if (!dessert_produced) {
       // ## if this happens then something bad is going on :/
       sio_puts("I SCREAM FOR ICE-CREAM?! \n");
 // ## PENALTY FOR LOOSING AN ORDER !!! YOU MAY NOT CHANGE THIS #
@@ -256,12 +302,15 @@ int  consume_dessert() {
       while (!spoon) {
         rand_sleep(10);
       }
-      spoon--;
-      dessert_produced--;
+      V(&mutex);
+      --spoon;
+      --dessert_produced;
       rand_sleep(600);
-      dessert_consumed++;
-      spoon++;
+      ++dessert_consumed;
+      ++spoon;
+      P(&mutex);
     }
+    V(&dessert_p);
     return 0;   
 }
 
@@ -325,6 +374,7 @@ void* producer( void* vargp ) {
       ******************************************************/
      
      // ## if there is a free slot we produce to fill it.
+     P(&producers);
      if( free_slots ) {
           // ## produce() takes reference to the product to produce. 
           unsigned int prod = 0;
@@ -337,12 +387,14 @@ void* producer( void* vargp ) {
           // ## update add produced value (called prod) to the array.
           printf("Putting production %u in slot %d\n", prod, last_slot);
           buff[last_slot] = prod;
+          V(&mutex);
           last_slot = last_slot + 1;  // filled a slot so move index
           if ( last_slot == num_slots ) {
                last_slot = 0;         // we must not go out-of-bounds.
           }
           free_slots = free_slots - 1; // one less free slots available
-
+          P(&mutex);
+          V(&consumers);
      }
   } // end while
   printf("Thread Runningtime was ~%lusec. \n", thrd_runtime.tv_sec);
@@ -377,10 +429,11 @@ void* consumer( void* vargp ) {
       * MISSING CODE 4/6                                   *
       * HERE YOU MUST REVISE AND ADD YOUR CODE FROM PART 1 *
       ******************************************************/     
-
+     P(&consumers);
      if (num_slots - free_slots) {
           printf("Consumer takes prod from slot %d ", first_slot);
           int tmp_prod = buff[first_slot];
+          V(&mutex);
           buff[first_slot] = -1;            // zero the slot consumed.
           first_slot = first_slot + 1;      // update buff index.
           if (first_slot == num_slots ) {
@@ -393,6 +446,8 @@ void* consumer( void* vargp ) {
 
           timeradd(&thrd_runtime, t, &thrd_runtime);
           free(t); // ef you DELETE ME you will have a MEMORY LEEK!!!     
+          P(&mutex);
+          V(&producers);
      }  
      
   } // end while
@@ -407,13 +462,19 @@ void* consumer( void* vargp ) {
 pthread_t spawn_producer( thread_info *arg )
 {
      printf("Spawning thread %d as a producer \n", arg->thread_nr);
-    
+     
+     pthread_t tid;
      producer(NULL);
      /******************************************************
       * MISSING CODE 5/6                                   *
       * HERE YOU MUST REVISE AND ADD YOUR CODE FROM PART 1 *
       ******************************************************/
-    
+        Pthread_create(
+          &tid,
+          NULL,
+          producer,
+          NULL);
+
      return 0;
 }
 
@@ -421,11 +482,16 @@ pthread_t spawn_consumer( thread_info *arg )
 {
      printf("Spawning thread %d as a consumer\n", arg->thread_nr);
 
+     pthread_t tid;
      consumer(NULL);
      /******************************************************
       * MISSING CODE 6/6                                   *
       * HERE YOU MUST REVISE AND ADD YOUR CODE FROM PART 1 *
       ******************************************************/
-     
+        Pthread_create(
+          &tid,
+          NULL,
+          consumer,
+          NULL);
      return 0;
 }

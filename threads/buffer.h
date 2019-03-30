@@ -67,7 +67,15 @@ sem_t free_slot_lock; // protects the buffer and free_slot index
  * We added the locks for the ringbuffer but you may  *
  * need more locks, right?                            *
  ******************************************************/
-
+sem_t mutex;
+sem_t entree_c;
+sem_t entree_p;
+sem_t steak_c;
+sem_t steak_p;
+sem_t vegan_c;
+sem_t vegan_p;
+sem_t dessert_c;
+sem_t dessert_p;
 
 // ## Functions to create new threads ########################//
 pthread_t spawn_producer(thread_info *arg);
